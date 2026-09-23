@@ -18,9 +18,9 @@ Captured via the same Wireshark + USBPcap method used for haptics (see
 - Implemented in `kraken_v4_pro_haptics.py` as `balance <percent>` /
   `balance-raw <0-20>` -- synthesizes any value, no lookup table needed.
 
-Not yet tested against real hardware on Linux (only reverse-engineered from
-Windows captures so far -- unlike the haptics commands, which are confirmed
-working on a real device).
+**Confirmed working against real hardware on Linux:** `balance-raw 0`,
+`balance-raw 20`, and `balance 50` all sent successfully with no USB
+errors.
 
 ## What we know about the audio interfaces (from Linux-side inspection)
 
@@ -44,28 +44,51 @@ firmware string quirk from how the two virtual sound devices are named
 internally, not meaningful beyond confirming "Chat" is a real concept baked
 into the device.
 
+## Exposing both interfaces as separate PipeWire sinks
+
+Switching the card's ALSA/PipeWire profile to **"Pro Audio"** (`wpctl
+set-profile <device-id> <pro-audio-index>`, index found via `pw-dump`'s
+`EnumProfile` for the device) does expose both interfaces simultaneously:
+
+- `alsa_output...pro-output-0` (`hw:X,0`) = **Game** (interface 2)
+- `alsa_output...pro-output-1` (`hw:X,1`) = **Chat** (interface 6)
+
+Confirmed by checking each node's `api.alsa.path` via `wpctl inspect`.
+
+**Trade-off:** Pro Audio mode is a whole-card change, not a per-stream
+toggle. It switches the card to raw multichannel routing -- each sink
+exposes individual mono FL/FR ports instead of a normal one-click stereo
+device in the GNOME sound picker, apps need manual patchbay routing (e.g.
+`qpwgraph`, `helvum`, or `pw-link`), and it also disrupted the mic input
+(a WEBRTC capture stream got stuck "negotiating" instead of connecting)
+until switched back to the normal profile. Not a clean solution as-is --
+reverted to the default `analog-stereo` profile afterward.
+
 ## What's still missing
 
-**Exposing interface 6 as its own routable PipeWire sink on Linux.** Right
-now PipeWire's ALSA card profile logic (`api.alsa.split-enable = "true"`)
-only seems to expose the analog-stereo / iec958-stereo profile split
-(Analog Output vs Digital S/PDIF in the GNOME sound picker), not this
-second Game/Chat playback stream as an independently selectable sink. Need
-to figure out whether a custom PipeWire ALSA rule (e.g. a `.conf` snippet
-targeting `alsa.card = "1"`, device 1 specifically) can surface both
-playback devices as separate sinks simultaneously, so a voice chat app can
-be routed to interface 6 while games/music stay on interface 2.
+**A clean, always-on way to get two normal named stereo sinks** ("Game"
+and "Chat") without the whole-card Pro Audio side effects. Likely
+approaches to try:
 
-This is independent of the HID balance command -- even with balance fully
-controllable, we still need both ALSA playback devices routable
-separately for the whole Game/Chat setup to be useful (games -> interface
-2, Discord/voice chat -> interface 6, balance slider mixes them in
-hardware).
+1. A custom WirePlumber rule (`~/.config/wireplumber/wireplumber.conf.d/`
+   or a `.lua`/`.conf` script under the older config style) that manually
+   creates two `adapter`/`api.alsa.pcm.sink` nodes bound to `hw:X,0` and
+   `hw:X,1` directly, bypassing ACP's profile exclusivity, while leaving
+   the rest of the card (mic, normal profile) alone.
+2. Alternatively, run a second, independent PipeWire/ALSA sink manually
+   via `pw-cli create-node` or a static `.conf` snippet targeting just the
+   `hw:X,1` subdevice, without touching the card's active profile at all.
+3. Once a clean "Chat" sink exists, route a voice app (Discord, Mumble,
+   etc.) to it via PipeWire's normal per-app output selection, and route
+   games/music to the normal "Game" analog sink -- then use
+   `balance`/`balance-raw` to mix them in hardware on the headset.
 
 ## Next steps
 
-1. Test the `balance`/`balance-raw` commands against real hardware.
-2. Investigate PipeWire ALSA node configuration to expose interface 6 as an
-   independent sink (custom `.conf` under
-   `~/.config/pipewire/pipewire.conf.d/` or similar, targeting the second
-   ALSA subdevice on card 1).
+1. ~~Test the `balance`/`balance-raw` commands against real hardware.~~ Done.
+2. Write a WirePlumber node-config snippet that exposes `hw:X,1` as a
+   permanent, cleanly-named "Chat" stereo sink without switching the whole
+   card to Pro Audio profile.
+3. Verify a voice app can be routed to that Chat sink independently while
+   games/music stay on the normal Game sink, and that the hardware balance
+   command actually mixes the two audibly.
