@@ -103,8 +103,9 @@ before sending, and reattaches it afterward.
   all -- if it doesn't validate, we can mutate captured payloads freely.
 - The Custom Audio-to-Haptics profile's parameter sub-commands (`0x23`,
   `0x0c`) aren't mapped.
-- Only tested by replaying captures; not yet confirmed to work against a
-  real device on Linux.
+- Confirmed working against a real Kraken V4 Pro on Linux: intensity
+  levels, Audio-to-Haptics enable/disable, and profile switching (Dynamic,
+  Balanced) all replay correctly with no Synapse installed.
 
 ## Captures
 
