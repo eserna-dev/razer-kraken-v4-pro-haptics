@@ -34,12 +34,31 @@ Every command is a 64-byte payload (byte 0 is the Report ID prefix,
 ```
 
 followed by a sub-opcode and its arguments, then zero padding, with a
-checksum-like byte at offset 45 whose algorithm is **not yet known** (it is
-not the classic OpenRazer XOR checksum -- verified against known-good
-lighting-command checksums, which do use that XOR formula -- nor any common
-CRC-8 variant tried so far). Because of this we can't yet synthesize
-arbitrary command bytes; the script instead replays exact byte sequences
-captured from every reachable state in the Synapse UI.
+checksum byte at offset 45.
+
+**Solved:** for this command class (`0x25`, covering intensity/profile/
+Audio-to-Haptics-enable below), the checksum is a plain two's-complement
+byte-sum over the sub-opcode+payload region:
+
+```
+checksum = (256 - sum(payload[10:45])) & 0xFF
+```
+
+Verified exactly against all 12 known-good captured payloads (6 intensity
+levels, 4 profiles, 2 Audio-to-Haptics states) -- not just consistent with
+each individually, but every single one matches this one formula. It is
+*not* the classic OpenRazer XOR checksum (verified against known-good
+lighting-command checksums, which do use that formula), and it is a
+different algorithm from the Game/Chat balance command's checksum below
+(command class `0x05`) -- brute-forced every possible byte range and no
+sum-based formula reproduces that command's checksums, so the two command
+classes use genuinely different checksum schemes, not one general formula.
+
+The script currently still replays exact captured byte sequences for
+intensity/profile/Audio-to-Haptics rather than synthesizing with this
+formula, since the lookup tables already cover every reachable state; the
+formula is documented here in case a new sub-command needs a fresh,
+non-captured payload in the future.
 
 ### Command: set haptic intensity (sub-opcode `0x8a`)
 
@@ -130,26 +149,17 @@ before sending, and reattaches it afterward.
 
 ## Known limitations / next steps
 
-- The intensity/profile/Audio-to-Haptics-enable checksum (byte 45) is still
-  unsolved -- it's a *different* command class/header than Game/Chat
-  balance, so the balance checksum formula doesn't directly transfer.
-  Cracking it would let us synthesize arbitrary intensity/profile commands
-  instead of replaying a fixed set of captured states. Worth trying:
-  gathering more samples and solving for an unknown CRC-8/16 via linear
-  algebra (CRC is linear over GF(2)), or just testing empirically whether
-  the device rejects a wrong checksum at all.
-- The Game/Chat balance checksum **is** solved (see above) -- that command
-  is synthesized, not replayed.
+- Both checksum algorithms are now solved -- see the Protocol section
+  above for the `0x25`-class two's-complement sum formula and the
+  Game/Chat balance section for its XOR formula.
 - The Custom Audio-to-Haptics profile's parameter sub-commands (`0x23`,
   `0x0c`) aren't mapped.
 - Confirmed working against a real Kraken V4 Pro on Linux: intensity
-  levels, Audio-to-Haptics enable/disable, and profile switching (Dynamic,
-  Balanced) all replay correctly with no Synapse installed. Game/Chat
-  balance not yet tested on hardware (protocol reverse-engineered from
-  Windows captures only so far).
-- Exposing the headset's second ("Chat") USB audio playback interface as
-  its own routable PipeWire sink on Linux is a separate, unsolved problem
-  -- see `GAME_CHAT_MIXING.md`.
+  levels, Audio-to-Haptics enable/disable, profile switching, and
+  Game/Chat balance all work with no Synapse installed. Separate Game/Chat
+  audio routing (two distinct sinks, mixed in hardware by the balance
+  command) is also confirmed working end-to-end -- see
+  `GAME_CHAT_MIXING.md`.
 
 ## Captures
 
