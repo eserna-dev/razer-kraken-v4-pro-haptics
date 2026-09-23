@@ -80,8 +80,10 @@ Different header from the commands above:
 |---|---|---|
 | 13 | balance | `0x00`-`0x14` (0-20) |
 
-`0x00` = full Game, `0x0a` (10) = center, `0x14` (20) = full Chat -- 21 steps,
-almost certainly 5% increments of Synapse's 0-100% slider.
+`0x00` = full Chat, `0x0a` (10) = center, `0x14` (20) = full Game -- 21 steps,
+almost certainly 5% increments of Synapse's 0-100% slider. (Confirmed
+against real hardware; this is inverted from our initial guess when we only
+had the Windows capture to go on -- see `GAME_CHAT_MIXING.md`.)
 
 **This command's checksum is fully solved:** `checksum = 0x3a XOR value`
 (byte 45). Verified against four independently captured samples spanning
@@ -109,7 +111,18 @@ python3 kraken_v4_pro_haptics.py intensity 0
 python3 kraken_v4_pro_haptics.py audio-to-haptics on
 python3 kraken_v4_pro_haptics.py profile dynamic
 python3 kraken_v4_pro_haptics.py balance 75      # 75% toward Chat
-python3 kraken_v4_pro_haptics.py balance-raw 15  # native 0-20 scale
+python3 kraken_v4_pro_haptics.py balance-raw 5   # native 0-20 scale, 0=Chat 20=Game
+```
+
+To actually route separate audio (e.g. game audio vs. Discord voice chat)
+to the two sides of the balance mix, install the PipeWire config that
+exposes the headset's two USB audio interfaces as separate "(Game)"/"(Chat)"
+sinks -- see `GAME_CHAT_MIXING.md` for details:
+
+```bash
+mkdir -p ~/.config/wireplumber/wireplumber.conf.d
+cp wireplumber/51-razer-kraken-v4-pro-game-chat.conf ~/.config/wireplumber/wireplumber.conf.d/
+systemctl --user restart wireplumber pipewire pipewire-pulse
 ```
 
 The script detaches the kernel's generic HID driver from interface 4

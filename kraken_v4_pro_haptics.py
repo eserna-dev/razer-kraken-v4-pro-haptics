@@ -135,7 +135,9 @@ def set_balance(dev, value):
 def set_balance_percent(dev, percent):
     if not (0 <= percent <= 100):
         sys.exit("percent must be between 0 (full Game) and 100 (full Chat)")
-    value = round(percent / 5)
+    # Native device scale is inverted: raw 0 = full Chat, raw 20 = full Game
+    # (confirmed against real hardware -- see GAME_CHAT_MIXING.md).
+    value = BALANCE_MAX - round(percent / 5)
     send_report(dev, make_balance_payload(value))
 
 
@@ -159,7 +161,10 @@ def main():
 
     p_balance_raw = sub.add_parser(
         "balance-raw",
-        help=f"Set Game/Chat balance using the device's native {BALANCE_MIN}-{BALANCE_MAX} scale",
+        help=(
+            f"Set Game/Chat balance using the device's native {BALANCE_MIN}-{BALANCE_MAX} "
+            "scale (0=full Chat, 20=full Game -- inverted from the 'balance' percent command)"
+        ),
     )
     p_balance_raw.add_argument("value", type=int)
 
