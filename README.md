@@ -68,6 +68,26 @@ this sub-command appears to be sent as part of a broader status-sync
 packet, so byte 16's meaning could be narrower than "just" the on/off
 flag.)
 
+### Command: set Game/Chat balance (command class `0x05`, sub-header `80 dc 00 01`)
+
+Different header from the commands above:
+
+```
+02 00 60 00 00 00 05 00 00 80 dc 00 01 <value> ...
+```
+
+| Byte offset | Meaning | Values |
+|---|---|---|
+| 13 | balance | `0x00`-`0x14` (0-20) |
+
+`0x00` = full Game, `0x0a` (10) = center, `0x14` (20) = full Chat -- 21 steps,
+almost certainly 5% increments of Synapse's 0-100% slider.
+
+**This command's checksum is fully solved:** `checksum = 0x3a XOR value`
+(byte 45). Verified against four independently captured samples spanning
+the full range. Unlike the other commands, this one is *synthesized*, not
+replayed from a lookup table -- any value 0-20 works without a new capture.
+
 ## Usage
 
 ```bash
@@ -88,6 +108,8 @@ python3 kraken_v4_pro_haptics.py intensity 5
 python3 kraken_v4_pro_haptics.py intensity 0
 python3 kraken_v4_pro_haptics.py audio-to-haptics on
 python3 kraken_v4_pro_haptics.py profile dynamic
+python3 kraken_v4_pro_haptics.py balance 75      # 75% toward Chat
+python3 kraken_v4_pro_haptics.py balance-raw 15  # native 0-20 scale
 ```
 
 The script detaches the kernel's generic HID driver from interface 4
@@ -95,17 +117,26 @@ before sending, and reattaches it afterward.
 
 ## Known limitations / next steps
 
-- Checksum algorithm at byte 45 is unsolved. Cracking it would let us
-  synthesize arbitrary commands instead of replaying a fixed set of
-  captured states. Worth trying: gathering many more samples and solving
-  for an unknown CRC-8/16 via linear algebra (CRC is linear over GF(2)), or
-  just testing empirically whether the device rejects a wrong checksum at
-  all -- if it doesn't validate, we can mutate captured payloads freely.
+- The intensity/profile/Audio-to-Haptics-enable checksum (byte 45) is still
+  unsolved -- it's a *different* command class/header than Game/Chat
+  balance, so the balance checksum formula doesn't directly transfer.
+  Cracking it would let us synthesize arbitrary intensity/profile commands
+  instead of replaying a fixed set of captured states. Worth trying:
+  gathering more samples and solving for an unknown CRC-8/16 via linear
+  algebra (CRC is linear over GF(2)), or just testing empirically whether
+  the device rejects a wrong checksum at all.
+- The Game/Chat balance checksum **is** solved (see above) -- that command
+  is synthesized, not replayed.
 - The Custom Audio-to-Haptics profile's parameter sub-commands (`0x23`,
   `0x0c`) aren't mapped.
 - Confirmed working against a real Kraken V4 Pro on Linux: intensity
   levels, Audio-to-Haptics enable/disable, and profile switching (Dynamic,
-  Balanced) all replay correctly with no Synapse installed.
+  Balanced) all replay correctly with no Synapse installed. Game/Chat
+  balance not yet tested on hardware (protocol reverse-engineered from
+  Windows captures only so far).
+- Exposing the headset's second ("Chat") USB audio playback interface as
+  its own routable PipeWire sink on Linux is a separate, unsolved problem
+  -- see `GAME_CHAT_MIXING.md`.
 
 ## Captures
 
