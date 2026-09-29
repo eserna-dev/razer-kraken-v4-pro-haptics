@@ -144,6 +144,20 @@ cp wireplumber/51-razer-kraken-v4-pro-game-chat.conf ~/.config/wireplumber/wirep
 systemctl --user restart wireplumber pipewire pipewire-pulse
 ```
 
+**Volume much quieter than on Windows?** Disabling ACP for this device
+(needed for the sink split above) also means PipeWire's software volume no
+longer maps onto a sane ACP-managed hardware volume curve -- the two
+`PCM` ALSA hardware controls can end up sitting well below max (e.g. 68%
+and 73%, around -20 to -24dB) even while PipeWire itself shows 100%. Check
+and fix with:
+
+```bash
+amixer -c <card> scontrols          # find the card number with `aplay -l`
+amixer -c <card> sset 'PCM',0 100%
+amixer -c <card> sset 'PCM',1 100%
+sudo alsactl store <card>           # persist across reboot/replug
+```
+
 The script detaches the kernel's generic HID driver from interface 4
 before sending, and reattaches it afterward.
 
