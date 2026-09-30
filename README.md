@@ -158,6 +158,19 @@ amixer -c <card> sset 'PCM',1 100%
 sudo alsactl store <card>           # persist across reboot/replug
 ```
 
+**Volume scroll wheel jumps in big steps (e.g. ~8 clicks goes from 0 to
+100%)?** Confirmed via a raw `/dev/input/eventN` capture of the headset's
+input device that this isn't a Linux-side bug or a duplicate-device
+conflict -- one physical wheel click genuinely fires **two** full
+press/release `KEY_VOLUMEUP`/`KEY_VOLUMEDOWN` events from the hardware
+itself, back to back (~10ms apart). GNOME's default volume step is 6% per
+event, so two events per click means ~12% per click. Fix by halving
+the step to compensate:
+
+```bash
+gsettings set org.gnome.settings-daemon.plugins.media-keys volume-step 3
+```
+
 The script detaches the kernel's generic HID driver from interface 4
 before sending, and reattaches it afterward.
 
